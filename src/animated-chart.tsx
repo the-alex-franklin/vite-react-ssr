@@ -1,7 +1,7 @@
 import { hydrateRoot } from "react-dom/client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import * as d3 from "d3";
 import moment from "moment";
+import * as d3 from "d3";
 import "virtual:windi.css";
 
 type Data = { age: number; net_worth: number; is_retired: boolean };
@@ -11,45 +11,46 @@ export default function AnimatedChart() {
   const [markerAge, setMarkerAge] = useState(65);
 
   const date_of_birth = moment('1991-06-05');
-  const age = moment().diff(date_of_birth, 'years');
-  const age_moment = moment(date_of_birth).add(age, 'years');
+  const age = moment().diff(date_of_birth, 'months') / 12;
+  const age_moment = moment();
 
-  const retirementAge = 65;
-  const retirementMoment = moment(date_of_birth).add(retirementAge, 'years');
+  const retirement_age = 65;
+  const retirement_moment = moment(date_of_birth).add(retirement_age, 'years');
 
-  const deathAge = 92;
+  const death_age = 92;
+  const death_moment = moment(date_of_birth).add(death_age, 'years');
 
-  const tax_rate = 0.3;
-  const working_annual_income = 120_000;
-  const retirement_annual_income = 4000;
-  const retirment_monthly_expenses = 13000;
+  const tax_rate = 0.5;
+  const working_annual_income = 180_000;
+  const retirement_gross_annual_income = 0;
+  const retirment_monthly_expenses = 7500;
   const savings_rate = 0.1;
   const annual_investment_return_pct = 0.07;
-  const return_pct = annual_investment_return_pct / 12;
-  const tax_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
-  const working_monthly_savings = tax_monthly_income * savings_rate;
-  const restirement_monthly_income = retirement_annual_income / 12;
-  const retirement_net_income = restirement_monthly_income - retirment_monthly_expenses;
+  const monthly_return_pct = annual_investment_return_pct / 12;
+  const taxed_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
+  const monthly_savings_contribution = taxed_monthly_income * savings_rate;
+  const retirement_gross_monthly_income = retirement_gross_annual_income / 12;
+  const retirement_net_income = retirement_gross_monthly_income - retirment_monthly_expenses;
 
-  const starting_savings = 100000;
-  const data: Data[] = [];
+  const starting_savings = 2500;
+  const data: Data[] = [{ age, net_worth: starting_savings, is_retired: false }];
 
-  let virtual_age = useMemo(() => age, []);
   let virtual_savings = useMemo(() => starting_savings, []);
-  let i = 0;
+  while (age_moment.isSameOrBefore(death_moment)) {
+    const virtual_months = age_moment.month() - date_of_birth.month();
+    const virtual_age = age_moment.year() - date_of_birth.year() + virtual_months / 12;
 
-  while (virtual_age <= deathAge) {
-    if (i !== 0 && i % 12 === 0) virtual_age += 1;
+    const income_modifier = data.at(-1)!.is_retired
+      ? retirement_net_income
+      : monthly_savings_contribution;
 
-    if (age_moment.add(1, 'month').isSameOrBefore(retirementMoment)) {
-      virtual_savings += virtual_savings * return_pct + working_monthly_savings;
-      data.push({ age: virtual_age + ((i % 12) / 12), net_worth: virtual_savings, is_retired: false });
-    } else {
-      virtual_savings += virtual_savings * return_pct + retirement_net_income;
-      data.push({ age: virtual_age + ((i % 12) / 12), net_worth: virtual_savings, is_retired: true });
-    }
-
-    i++;
+    virtual_savings += virtual_savings * monthly_return_pct + income_modifier;
+    data.push({
+      age: virtual_age,
+      net_worth: virtual_savings,
+      is_retired: age_moment.isSameOrAfter(retirement_moment),
+    });
+    age_moment.add(1, 'month');
   }
 
   useEffect(() => {
@@ -85,7 +86,7 @@ export default function AnimatedChart() {
 
     const xScale = d3
       .scaleLinear()
-      .domain([age, deathAge])
+      .domain([age, death_age])
       .range([margin, width - margin]);
 
     const yScale = d3
@@ -166,8 +167,8 @@ export default function AnimatedChart() {
     svg
       .append("line")
       .attr("class", "draggable")
-      .attr("x1", xScale(retirementAge))
-      .attr("x2", xScale(retirementAge))
+      .attr("x1", xScale(retirement_age))
+      .attr("x2", xScale(retirement_age))
       .attr("y1", margin + 20)
       .attr("y2", height - margin)
       .attr("stroke", "#4a90e2")
@@ -178,18 +179,18 @@ export default function AnimatedChart() {
     svg
       .append("text")
       .attr("class", "label")
-      .attr("x", xScale(retirementAge))
+      .attr("x", xScale(retirement_age))
       .attr("y", margin - 10)
       .attr("fill", "#4a90e2")
       .attr("text-anchor", "middle")
       .attr("font-weight", "bold")
       .attr("font-size", "14px")
-      .text(`Age ${retirementAge}`);
+      .text(`Age ${retirement_age}`);
 
     svg
       .append("text")
       .attr("class", "net-worth")
-      .attr("x", xScale(retirementAge))
+      .attr("x", xScale(retirement_age))
       .attr("y", margin + 10)
       .attr("fill", "#4a90e2")
       .attr("text-anchor", "middle")
@@ -201,7 +202,7 @@ export default function AnimatedChart() {
     const svg = d3.select(svgRef.current);
     const xScale = d3
       .scaleLinear()
-      .domain([age, deathAge])
+      .domain([age, death_age])
       .range([50, 750]);
 
     const line = svg.select("line.draggable");
@@ -212,7 +213,7 @@ export default function AnimatedChart() {
       const [mouseX] = d3.pointer(event);
       const newAge = Math.floor(xScale.invert(mouseX));
 
-      if (newAge >= age && newAge <= deathAge) {
+      if (newAge >= age && newAge <= death_age) {
         setMarkerAge(newAge);
         line.attr("x1", xScale(newAge)).attr("x2", xScale(newAge));
         label.attr("x", xScale(newAge)).text(`Age ${newAge}`);
