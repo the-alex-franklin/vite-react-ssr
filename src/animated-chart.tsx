@@ -4,6 +4,10 @@ import moment from "moment";
 import * as d3 from "d3";
 import "virtual:windi.css";
 
+function clampZero(value: number) {
+  return Math.max(0, value);
+}
+
 type Data = { age: number; net_worth: number; is_retired: boolean };
 
 export default function AnimatedChart() {
@@ -20,23 +24,23 @@ export default function AnimatedChart() {
   const death_age = 92;
   const death_moment = moment(date_of_birth).add(death_age, 'years');
 
-  const tax_rate = 0.5;
   const working_annual_income = 180_000;
+  const tax_rate = 0.5;
+  const savings_rate = 0.1;
   const retirement_gross_annual_income = 0;
   const retirment_monthly_expenses = 7500;
-  const savings_rate = 0.1;
   const annual_investment_return_pct = 0.07;
   const monthly_return_pct = annual_investment_return_pct / 12;
-  const taxed_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
-  const monthly_savings_contribution = taxed_monthly_income * savings_rate;
+  const post_tax_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
+  const monthly_savings_contribution = post_tax_monthly_income * savings_rate;
   const retirement_gross_monthly_income = retirement_gross_annual_income / 12;
   const retirement_net_income = retirement_gross_monthly_income - retirment_monthly_expenses;
 
-  const starting_savings = 2500;
-  const data: Data[] = [{ age, net_worth: starting_savings, is_retired: false }];
+  const invested_savings = 2500;
+  const data: Data[] = [{ age, net_worth: invested_savings, is_retired: false }];
 
-  let virtual_savings = useMemo(() => starting_savings, []);
-  while (age_moment.isSameOrBefore(death_moment)) {
+  let virtual_savings = useMemo(() => invested_savings, []);
+  while (age_moment.isSameOrBefore(death_moment, 'months')) {
     const virtual_months = age_moment.month() - date_of_birth.month();
     const virtual_age = age_moment.year() - date_of_birth.year() + virtual_months / 12;
 
@@ -45,6 +49,7 @@ export default function AnimatedChart() {
       : monthly_savings_contribution;
 
     virtual_savings += virtual_savings * monthly_return_pct + income_modifier;
+    virtual_savings = clampZero(virtual_savings);
     data.push({
       age: virtual_age,
       net_worth: virtual_savings,
@@ -195,7 +200,11 @@ export default function AnimatedChart() {
       .attr("fill", "#4a90e2")
       .attr("text-anchor", "middle")
       .attr("font-size", "14px")
-      .text(`Net Worth: $${data.find((d) => d.is_retired === true)?.net_worth.toLocaleString().slice(0, -1)}`);
+      .text(`Net Worth: $${(() => {
+        const value = data.find((d) => d.is_retired === true)?.net_worth.toLocaleString();
+        if (value?.match(/\.\d{3}$/)) return value.slice(0, -1);
+        return value;
+      })()}`);
   }, []);
 
   useEffect(() => {
@@ -217,7 +226,11 @@ export default function AnimatedChart() {
         setMarkerAge(newAge);
         line.attr("x1", xScale(newAge)).attr("x2", xScale(newAge));
         label.attr("x", xScale(newAge)).text(`Age ${newAge}`);
-        net_worth.attr("x", xScale(newAge)).text(`Net Worth: $${data.find((d) => d.age === newAge)?.net_worth.toLocaleString().slice(0, -1)}`);
+        net_worth.attr("x", xScale(newAge)).text(`Net Worth: $${(() => {
+          const value = data.find((d) => d.age === newAge)?.net_worth.toLocaleString();
+          if (value?.match(/\.\d{3}$/)) return value.slice(0, -1);
+          return value;
+        })()}`);
       }
     };
 
