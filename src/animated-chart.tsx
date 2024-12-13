@@ -4,6 +4,13 @@ import moment from "moment";
 import * as d3 from "d3";
 import "virtual:windi.css";
 
+function money(value?: number): string {
+  if (value === undefined) return "$0.00";
+  const val = value.toLocaleString();
+  if (val.match(/\.\d{3}$/)) return "$" + val.slice(0, -1);
+  return "$" + val;
+}
+
 function clampZero(value: number) {
   return Number(Math.max(0, value).toFixed(2));
 }
@@ -25,11 +32,12 @@ export default function AnimatedChart() {
   const death_moment = moment(date_of_birth).add(death_age, 'years');
 
   const working_annual_income = 180_000;
+  const retirement_gross_annual_income = 0;
+  const retirment_monthly_expenses = 10000;
   const tax_rate = 0.5;
   const savings_rate = 0.15;
-  const retirement_gross_annual_income = 0;
-  const retirment_monthly_expenses = 7500;
   const annual_investment_return_pct = 0.07;
+
   const monthly_return_pct = annual_investment_return_pct / 12;
   const post_tax_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
   const monthly_savings_contribution = post_tax_monthly_income * savings_rate;
@@ -65,7 +73,11 @@ export default function AnimatedChart() {
 
     svg.selectAll("*").remove();
 
-    svg.attr("style", "color: white; user-select: none; overflow: visible;");
+    svg.attr("style", `
+      color: white;
+      user-select: none;
+      overflow: visible;
+    `);
 
     const gradient = svg
       .append("defs")
@@ -199,11 +211,7 @@ export default function AnimatedChart() {
       .attr("fill", "#4a90e2")
       .attr("text-anchor", "middle")
       .attr("font-size", "14px")
-      .text(`Net Worth: $${(() => {
-        const value = data.find((d) => d.is_retired === true)?.net_worth.toLocaleString();
-        if (value?.match(/\.\d{3}$/)) return value.slice(0, -1);
-        return value;
-      })()}`);
+      .text(`Net Worth: $${money(data.find((d) => d.is_retired === true)?.net_worth)}`);
   }, []);
 
   useEffect(() => {
@@ -225,16 +233,13 @@ export default function AnimatedChart() {
         setMarkerAge(newAge);
         line.attr("x1", xScale(newAge)).attr("x2", xScale(newAge));
         label.attr("x", xScale(newAge)).text(`Age ${newAge}`);
-        net_worth.attr("x", xScale(newAge)).text(`Net Worth: $${(() => {
-          const value = data.find((d) => d.age === newAge)?.net_worth.toLocaleString();
-          if (value?.match(/\.\d{3}$/)) return value.slice(0, -1);
-          return value;
-        })()}`);
+        net_worth.attr("x", xScale(newAge)).text(`Net Worth: ${money(data.find((d) => d.age === newAge)?.net_worth)}`);
       }
     };
 
-    svg.on("mousedown", () => {
+    svg.on("mousedown", (event: MouseEvent) => {
       svg.on("mousemove", updatePosition);
+      updatePosition(event);
     });
 
     d3.select(window).on("mouseup", () => {
