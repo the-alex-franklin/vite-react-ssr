@@ -16,7 +16,7 @@ export default function AnimatedChart() {
 
   const date_of_birth = moment('1991-06-05');
   const age = moment().diff(date_of_birth, 'months') / 12;
-  const age_moment = moment();
+  const age_moment = moment({ date: date_of_birth.date() });
 
   const retirement_age = 65;
   const retirement_moment = moment(date_of_birth).add(retirement_age, 'years');
@@ -41,8 +41,9 @@ export default function AnimatedChart() {
 
   let virtual_savings = useMemo(() => invested_savings, []);
   while (age_moment.isSameOrBefore(death_moment, 'months')) {
-    const virtual_months = age_moment.month() - date_of_birth.month();
-    const virtual_age = age_moment.year() - date_of_birth.year() + virtual_months / 12;
+    // const virtual_months = age_moment.month() - date_of_birth.month();
+    // const virtual_age = age_moment.year() - date_of_birth.year() + virtual_months / 12;
+    const virtual_age = age_moment.diff(date_of_birth, 'months', true) / 12;
 
     const income_modifier = data.at(-1)!.is_retired
       ? retirement_net_income
@@ -57,6 +58,8 @@ export default function AnimatedChart() {
     });
     age_moment.add(1, 'month');
   }
+
+  console.log({ data });
 
   useEffect(() => {
     const svg = d3.select(svgRef.current);
