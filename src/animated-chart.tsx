@@ -5,7 +5,7 @@ import * as d3 from "d3";
 import "virtual:windi.css";
 
 function clampZero(value: number) {
-  return Math.max(0, value);
+  return Number(Math.max(0, value).toFixed(2));
 }
 
 type Data = { age: number; net_worth: number; is_retired: boolean };
@@ -26,7 +26,7 @@ export default function AnimatedChart() {
 
   const working_annual_income = 180_000;
   const tax_rate = 0.5;
-  const savings_rate = 0.1;
+  const savings_rate = 0.15;
   const retirement_gross_annual_income = 0;
   const retirment_monthly_expenses = 7500;
   const annual_investment_return_pct = 0.07;
@@ -41,9 +41,7 @@ export default function AnimatedChart() {
 
   let virtual_savings = useMemo(() => invested_savings, []);
   while (age_moment.isSameOrBefore(death_moment, 'months')) {
-    // const virtual_months = age_moment.month() - date_of_birth.month();
-    // const virtual_age = age_moment.year() - date_of_birth.year() + virtual_months / 12;
-    const virtual_age = age_moment.diff(date_of_birth, 'months', true) / 12;
+    const virtual_age = age_moment.diff(date_of_birth, 'years', true);
 
     const income_modifier = data.at(-1)!.is_retired
       ? retirement_net_income
@@ -58,8 +56,6 @@ export default function AnimatedChart() {
     });
     age_moment.add(1, 'month');
   }
-
-  console.log({ data });
 
   useEffect(() => {
     const svg = d3.select(svgRef.current);
@@ -223,7 +219,7 @@ export default function AnimatedChart() {
 
     const updatePosition = (event: MouseEvent) => {
       const [mouseX] = d3.pointer(event);
-      const newAge = Math.floor(xScale.invert(mouseX));
+      const newAge = Math.round(xScale.invert(mouseX));
 
       if (newAge >= age && newAge <= death_age) {
         setMarkerAge(newAge);
