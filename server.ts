@@ -8,6 +8,10 @@ import { readFileSync } from 'fs';
 
 const app = new Hono();
 
+app.get('/', async (c) => {
+  return c.text('Not Found', 404);
+});
+
 app.get('/health', async (c) => {
   return c.text('200 OK', 200);
 });
@@ -27,13 +31,7 @@ app.get('/*',
   compress({ encoding: 'gzip' }),
   etag({ retainedHeaders: [...RETAINED_304_HEADERS] }),
   async (c) => {
-    const start = performance.now();
-    const path = c.req.path;
-    if (path === '/') return c.text('Not Found', 404);
-    const html = readFileSync(`./dist${path}.html`, 'utf-8');
-    const end = performance.now();
-    console.log(`Serving ${path} took ${end - start}ms`); // eslint-disable-line no-console
-
+    const html = readFileSync(`./dist${c.req.path}.html`, 'utf-8');
     return c.html(html);
   },
 );
