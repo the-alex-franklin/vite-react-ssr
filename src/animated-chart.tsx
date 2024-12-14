@@ -39,50 +39,58 @@ export default function AnimatedChart() {
   //   </div>
   // );
 
-  const date_of_birth = moment('1991-06-05');
-  const age = moment().diff(date_of_birth, 'months') / 12;
-  const age_moment = moment({ date: date_of_birth.date() });
+  const { data, age, death_age, retirement_age, invested_savings } = useMemo(() => {
+    const date_of_birth = moment('1991-06-05');
+    const age = moment().diff(date_of_birth, 'months') / 12;
+    const age_moment = moment({ date: date_of_birth.date() });
 
-  const retirement_age = 65;
-  const retirement_moment = moment(date_of_birth).add(retirement_age, 'years');
+    const retirement_age = 65;
+    const retirement_moment = moment(date_of_birth).add(retirement_age, 'years');
 
-  const death_age = 94;
-  const death_moment = moment(date_of_birth).add(death_age + 1, 'years');
+    const death_age = 94;
+    const death_moment = moment(date_of_birth).add(death_age + 1, 'years');
 
-  const working_annual_income = 180_000;
-  const retirement_gross_annual_income = 0;
-  const retirment_monthly_expenses = 110_000;
-  const tax_rate = 0.35;
-  const savings_rate = 0.1;
-  const annual_investment_return_pct = 0.15;
+    const working_annual_income = 180_000;
+    const retirement_gross_annual_income = 0;
+    const retirment_monthly_expenses = 60_000;
+    const tax_rate = 0.35;
+    const savings_rate = 0.1;
+    const annual_investment_return_pct = 0.15;
 
-  const monthly_return_pct = annual_investment_return_pct / 12;
-  const post_tax_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
-  const monthly_savings_contribution = post_tax_monthly_income * savings_rate;
-  const retirement_gross_monthly_income = retirement_gross_annual_income / 12;
-  const retirement_net_income = retirement_gross_monthly_income - retirment_monthly_expenses;
+    const monthly_return_pct = annual_investment_return_pct / 12;
+    const post_tax_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
+    const monthly_savings_contribution = post_tax_monthly_income * savings_rate;
+    const retirement_gross_monthly_income = retirement_gross_annual_income / 12;
+    const retirement_net_income = retirement_gross_monthly_income - retirment_monthly_expenses;
 
-  const invested_savings = 2500;
-  const data: Data[] = [{ age, net_worth: invested_savings, is_retired: false }];
+    const invested_savings = 25_000;
+    const data: Data[] = [{ age, net_worth: invested_savings, is_retired: false }];
 
-  let virtual_savings = useMemo(() => invested_savings, []);
-  while (age_moment.isSameOrBefore(death_moment, 'month')) {
-    age_moment.add(1, 'month');
-    const virtual_age = age_moment.diff(date_of_birth, 'years', true);
+    let virtual_savings = invested_savings;
+    const start = performance.now();
+    while (age_moment.isSameOrBefore(death_moment, 'month')) {
+      age_moment.add(1, 'month');
+      const virtual_age = age_moment.diff(date_of_birth, 'years', true);
 
-    const income_modifier = data.at(-1)!.is_retired
-      ? retirement_net_income
-      : monthly_savings_contribution;
+      const income_modifier = data.at(-1)!.is_retired
+        ? retirement_net_income
+        : monthly_savings_contribution;
 
-    virtual_savings += virtual_savings * monthly_return_pct + income_modifier;
-    if (virtual_savings < 0) virtual_savings = 0;
+      virtual_savings += virtual_savings * monthly_return_pct + income_modifier;
+      if (virtual_savings < 0) virtual_savings = 0;
 
-    data.push({
-      age: Math.round(virtual_age * 100) / 100,
-      net_worth: virtual_savings,
-      is_retired: age_moment.isSameOrAfter(retirement_moment),
-    });
-  }
+      data.push({
+        age: Math.round(virtual_age * 100) / 100,
+        net_worth: virtual_savings,
+        is_retired: age_moment.isSameOrAfter(retirement_moment),
+      });
+    }
+
+    const end = performance.now();
+    console.log('Execution time:', end - start);
+
+    return { data, age, death_age, retirement_age, invested_savings };
+  }, []);
 
   useEffect(() => {
     const svg = d3.select(svgRef.current);
@@ -126,7 +134,7 @@ export default function AnimatedChart() {
 
     const yScale = d3
       .scaleLinear()
-      .domain([0, (d3.max(data, (d) => d.net_worth)! * 1.2)])
+      .domain([0, (d3.max(data, (d) => d.net_worth)! * 1.1)])
       .nice()
       .range([height - margin, margin]);
 
@@ -230,7 +238,7 @@ export default function AnimatedChart() {
       .attr("fill", "#4a90e2")
       .attr("text-anchor", "middle")
       .attr("font-size", "14px")
-      .text(`Net Worth: $${money(data.find((d) => d.is_retired === true)?.net_worth)}`);
+      .text(`Net Worth: ${money(data.find((d) => d.is_retired === true)?.net_worth)}`);
   }, []);
 
   useEffect(() => {
