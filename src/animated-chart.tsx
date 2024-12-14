@@ -46,8 +46,8 @@ export default function AnimatedChart() {
   const retirement_age = 65;
   const retirement_moment = moment(date_of_birth).add(retirement_age, 'years');
 
-  const death_age = 92;
-  const death_moment = moment(date_of_birth).add(death_age, 'years').add(11, 'months');
+  const death_age = 94;
+  const death_moment = moment(date_of_birth).add(death_age + 1, 'years');
 
   const working_annual_income = 180_000;
   const retirement_gross_annual_income = 0;
@@ -66,7 +66,7 @@ export default function AnimatedChart() {
   const data: Data[] = [{ age, net_worth: invested_savings, is_retired: false }];
 
   let virtual_savings = useMemo(() => invested_savings, []);
-  while (age_moment.isSameOrBefore(death_moment, 'months')) {
+  while (age_moment.isSameOrBefore(death_moment, 'month')) {
     age_moment.add(1, 'month');
     const virtual_age = age_moment.diff(date_of_birth, 'years', true);
 
@@ -121,7 +121,7 @@ export default function AnimatedChart() {
 
     const xScale = d3
       .scaleLinear()
-      .domain([age, death_age])
+      .domain([age, death_age + 1])
       .range([margin, width - margin]);
 
     const yScale = d3
@@ -237,7 +237,7 @@ export default function AnimatedChart() {
     const svg = d3.select(svgRef.current);
     const xScale = d3
       .scaleLinear()
-      .domain([age, death_age])
+      .domain([age, death_age + 1])
       .range([50, 750]);
 
     const line = svg.select("line.draggable");
@@ -250,7 +250,7 @@ export default function AnimatedChart() {
 
       const entry = data.find((d) => d.age >= new_age);
 
-      if (entry && entry.age >= age && new_age <= death_age) {
+      if (entry && entry.age >= age && entry.age < death_age + 1) {
         setMarkerAge(entry.age);
         line.attr("x1", xScale(entry.age)).attr("x2", xScale(entry.age));
         label.attr("x", xScale(entry.age)).text(`Age ${Math.floor(entry.age)}`);
