@@ -5,8 +5,23 @@ import { cors } from 'hono/cors';
 import { compress } from 'hono/compress';
 import { etag, RETAINED_304_HEADERS } from 'hono/etag';
 import { readFileSync } from 'fs';
+import { Try } from '@2or3godzillas/fp-try';
 
 const app = new Hono();
+
+const commonMiddleware = [
+  compress({ encoding: 'gzip' }),
+  etag({ retainedHeaders: [...RETAINED_304_HEADERS] }),
+];
+
+app.use('*', async (c, next) => {
+  const result = await Try(() => next());
+  if (result.failure) {
+    console.error('Server error:', result.error);
+    return c.text('Internal Server Error', 500);
+  }
+  return result.data;
+});
 
 app.get('/', async (c) => {
   return c.text('Not Found', 404);
@@ -22,32 +37,42 @@ app.get('/favicon.ico', async (c) => {
 
 app.get('/assets/*',
   cors({ origin: '*' }),
-  compress({ encoding: 'gzip' }),
-  etag({ retainedHeaders: [...RETAINED_304_HEADERS] }),
+  ...commonMiddleware,
   serveStatic({ root: './dist' }),
 );
 
+const htmlCache = new Map<string, string>();
+function getHtmlFile(path: string): string {
+  if (htmlCache.has(path)) return htmlCache.get(path)!;
+  const html = readFileSync(`./dist${path}.html`, 'utf-8');
+  htmlCache.set(path, html);
+  return html;
+}
+
 app.get('/*',
-  compress({ encoding: 'gzip' }),
-  etag({ retainedHeaders: [...RETAINED_304_HEADERS] }),
+  ...commonMiddleware,
   async (c) => {
-    const html = readFileSync(`./dist${c.req.path}.html`, 'utf-8');
-    return c.html(html);
+    const result = Try(() => getHtmlFile(c.req.path));
+    if (result.failure) return c.text('Not Found', 404);
+    return c.html(result.data);
   },
 );
 
 app.post('/*',
-  compress({ encoding: 'gzip' }),
+  ...commonMiddleware,
   async (c) => {
     const path = c.req.path;
     if (path === '/') return c.text('Not Found', 404);
-    const template = readFileSync(`./dist${path}.html`, 'utf-8');
 
-    const data = await c.req.text();
-    const injectable = data ? `<script>window.__INITIAL_DATA__ = ${data}</script>` : '';
-    const html = template.replace('<!--injectable-->', injectable);
+    const result = await Try(async () => {
+      const template = getHtmlFile(path);
+      const data = await c.req.text();
+      const injectable = data ? `<script>window.__INITIAL_DATA__ = ${JSON.stringify(data)}</script>` : '';
+      return template.replace('<!--injectable-->', injectable);
+    });
 
-    return c.html(html);
+    if (result.failure) return c.text('Not Found', 404);
+    return c.html(result.data);
   },
 );
 

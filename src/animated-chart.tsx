@@ -2,17 +2,29 @@ import { hydrateRoot } from "react-dom/client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import moment from "moment";
 import * as d3 from "d3";
+import { z } from "zod";
 import "virtual:windi.css";
 
-function money(value?: number): string {
-  if (value === undefined) return "$0.00";
-  const val = value.toLocaleString();
-  if (val.match(/\.\d{3}$/)) return "$" + val.slice(0, -1);
-  return "$" + val;
-}
+const initial_data = typeof window !== "undefined" ? window.__INITIAL_DATA__ : null;
+const parsed_data = z.object({
+  date_of_birth: z.string(),
+  retirement_age: z.number(),
+  death_age: z.number().transform((value) => value + 1),
+  working_annual_income: z.number(),
+  retirement_gross_annual_income: z.number(),
+  retirment_monthly_expenses: z.number(),
+  tax_rate: z.number(),
+  savings_rate: z.number(),
+  annual_investment_return_pct: z.number(),
+  invested_savings: z.number(),
+}).safeParse(initial_data);
 
-function clampZero(value: number) {
-  return Number(Math.max(0, value).toFixed(2));
+function money(value: number | null | undefined): string {
+  if (value == null) return '$0.00';
+  return '$' + value.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 type Data = { age: number; net_worth: number; is_retired: boolean };
@@ -20,6 +32,12 @@ type Data = { age: number; net_worth: number; is_retired: boolean };
 export default function AnimatedChart() {
   const svgRef = useRef<SVGSVGElement>(null);
   const [markerAge, setMarkerAge] = useState(65);
+
+  // if (!parsed_data.success) return (
+  //   <div className="w-screen h-screen bg-gray-800 flex flex-col items-center justify-center">
+  //     <div className="text-white">Invalid data</div>
+  //   </div>
+  // );
 
   const date_of_birth = moment('1991-06-05');
   const age = moment().diff(date_of_birth, 'months') / 12;
@@ -29,14 +47,14 @@ export default function AnimatedChart() {
   const retirement_moment = moment(date_of_birth).add(retirement_age, 'years');
 
   const death_age = 92;
-  const death_moment = moment(date_of_birth).add(death_age, 'years');
+  const death_moment = moment(date_of_birth).add(death_age, 'years').add(11, 'months');
 
   const working_annual_income = 180_000;
   const retirement_gross_annual_income = 0;
-  const retirment_monthly_expenses = 10000;
-  const tax_rate = 0.5;
-  const savings_rate = 0.15;
-  const annual_investment_return_pct = 0.07;
+  const retirment_monthly_expenses = 110_000;
+  const tax_rate = 0.35;
+  const savings_rate = 0.1;
+  const annual_investment_return_pct = 0.15;
 
   const monthly_return_pct = annual_investment_return_pct / 12;
   const post_tax_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
@@ -49,6 +67,7 @@ export default function AnimatedChart() {
 
   let virtual_savings = useMemo(() => invested_savings, []);
   while (age_moment.isSameOrBefore(death_moment, 'months')) {
+    age_moment.add(1, 'month');
     const virtual_age = age_moment.diff(date_of_birth, 'years', true);
 
     const income_modifier = data.at(-1)!.is_retired
@@ -56,13 +75,13 @@ export default function AnimatedChart() {
       : monthly_savings_contribution;
 
     virtual_savings += virtual_savings * monthly_return_pct + income_modifier;
-    virtual_savings = clampZero(virtual_savings);
+    if (virtual_savings < 0) virtual_savings = 0;
+
     data.push({
-      age: virtual_age,
+      age: Math.round(virtual_age * 100) / 100,
       net_worth: virtual_savings,
       is_retired: age_moment.isSameOrAfter(retirement_moment),
     });
-    age_moment.add(1, 'month');
   }
 
   useEffect(() => {
@@ -227,13 +246,15 @@ export default function AnimatedChart() {
 
     const updatePosition = (event: MouseEvent) => {
       const [mouseX] = d3.pointer(event);
-      const newAge = Math.round(xScale.invert(mouseX));
+      const new_age = xScale.invert(mouseX);
 
-      if (newAge >= age && newAge <= death_age) {
-        setMarkerAge(newAge);
-        line.attr("x1", xScale(newAge)).attr("x2", xScale(newAge));
-        label.attr("x", xScale(newAge)).text(`Age ${newAge}`);
-        net_worth.attr("x", xScale(newAge)).text(`Net Worth: ${money(data.find((d) => d.age === newAge)?.net_worth)}`);
+      const entry = data.find((d) => d.age >= new_age);
+
+      if (entry && entry.age >= age && new_age <= death_age) {
+        setMarkerAge(entry.age);
+        line.attr("x1", xScale(entry.age)).attr("x2", xScale(entry.age));
+        label.attr("x", xScale(entry.age)).text(`Age ${Math.floor(entry.age)}`);
+        net_worth.attr("x", xScale(entry.age)).text(`Net Worth: ${money(entry.net_worth)}`);
       }
     };
 
