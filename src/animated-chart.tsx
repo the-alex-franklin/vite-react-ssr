@@ -11,7 +11,6 @@ const parsed_data = z.object({
   retirement_age: z.number(),
   death_age: z.number().transform((value) => value + 1),
   working_annual_income: z.number(),
-  retirement_gross_annual_income: z.number(),
   retirment_monthly_expenses: z.number(),
   tax_rate: z.number(),
   savings_rate: z.number(),
@@ -27,11 +26,32 @@ function money(value: number | null | undefined): string {
   });
 }
 
+function binarySearch<T>(
+  array: T[],
+  predicate: (value: T) => boolean,
+): T | undefined {
+  let left = 0;
+  let right = array.length - 1;
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    if (predicate(array[mid]!)) {
+      right = mid - 1;
+    } else {
+      left = mid + 1;
+    }
+  }
+
+  return array[left];
+}
+
+const my_blue = "#4a90e2";
+
 type Data = { age: number; net_worth: number; is_retired: boolean };
 
 export default function AnimatedChart() {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [markerAge, setMarkerAge] = useState(65);
+  const [markerAge, setMarkerAge] = useState<number | null>(null);
 
   // if (!parsed_data.success) return (
   //   <div className="w-screen h-screen bg-gray-800 flex flex-col items-center justify-center">
@@ -44,44 +64,39 @@ export default function AnimatedChart() {
     const age = moment().diff(date_of_birth, 'months') / 12;
     const age_moment = moment({ date: date_of_birth.date() });
 
-    const retirement_age = 65;
+    const retirement_age = 42;
+    setMarkerAge(retirement_age);
     const retirement_moment = moment(date_of_birth).add(retirement_age, 'years');
 
-    const death_age = 94;
+    const death_age = 84;
     const death_moment = moment(date_of_birth).add(death_age + 1, 'years');
 
     const working_annual_income = 180_000;
-    const retirement_gross_annual_income = 0;
-    const retirment_monthly_expenses = 60_000;
+    const retirment_monthly_expenses = 20_000;
     const tax_rate = 0.35;
-    const savings_rate = 0.1;
-    const annual_investment_return_pct = 0.15;
+    const savings_rate = 0.15;
+    const annual_investment_return_pct = 0.10;
+    const invested_savings = 2500;
 
     const monthly_return_pct = annual_investment_return_pct / 12;
     const post_tax_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
     const monthly_savings_contribution = post_tax_monthly_income * savings_rate;
-    const retirement_gross_monthly_income = retirement_gross_annual_income / 12;
-    const retirement_net_income = retirement_gross_monthly_income - retirment_monthly_expenses;
-
-    const invested_savings = 25_000;
-    const data: Data[] = [{ age, net_worth: invested_savings, is_retired: false }];
 
     let virtual_savings = invested_savings;
-    while (age_moment.isSameOrBefore(death_moment, 'month')) {
-      age_moment.add(1, 'month');
+    const data: Data[] = [{ age, net_worth: invested_savings, is_retired: false }];
+    while (age_moment.add(1, 'month').isBefore(death_moment, 'month')) {
       const virtual_age = age_moment.diff(date_of_birth, 'years', true);
 
       const income_modifier = data.at(-1)!.is_retired
-        ? retirement_net_income
+        ? retirment_monthly_expenses
         : monthly_savings_contribution;
 
       virtual_savings += virtual_savings * monthly_return_pct + income_modifier;
-      if (virtual_savings < 0) virtual_savings = 0;
 
       data.push({
         age: Math.round(virtual_age * 100) / 100,
-        net_worth: virtual_savings,
-        is_retired: age_moment.isSameOrAfter(retirement_moment),
+        net_worth: Math.max(virtual_savings, 0),
+        is_retired: age_moment.isSameOrAfter(retirement_moment, 'month'),
       });
     }
 
@@ -114,18 +129,18 @@ export default function AnimatedChart() {
     gradient
       .append("stop")
       .attr("offset", "0%")
-      .attr("stop-color", "#4a90e2")
+      .attr("stop-color", my_blue)
       .attr("stop-opacity", 0.5);
 
     gradient
       .append("stop")
       .attr("offset", "100%")
-      .attr("stop-color", "#4a90e2")
+      .attr("stop-color", my_blue)
       .attr("stop-opacity", 0);
 
     const xScale = d3
       .scaleLinear()
-      .domain([age, death_age + 1])
+      .domain([age, death_age])
       .range([margin, width - margin]);
 
     const yScale = d3
@@ -179,13 +194,13 @@ export default function AnimatedChart() {
       .attr("x", margin)
       .attr("y", margin)
       .attr("width", 0)
-      .attr("height", height - margin - margin);
+      .attr("height", height - margin * 2);
 
     clipRect
       .transition()
       .duration(1000)
       .ease(d3.easeLinear)
-      .attr("width", width - margin - margin);
+      .attr("width", width - margin * 2);
 
     svg
       .append("path")
@@ -198,7 +213,7 @@ export default function AnimatedChart() {
       .append("path")
       .datum(data)
       .attr("fill", "none")
-      .attr("stroke", "#4a90e2")
+      .attr("stroke", my_blue)
       .attr("stroke-width", 2)
       .attr("d", lineGenerator)
       .attr("clip-path", "url(#clip)");
@@ -210,7 +225,7 @@ export default function AnimatedChart() {
       .attr("x2", xScale(retirement_age))
       .attr("y1", margin + 20)
       .attr("y2", height - margin)
-      .attr("stroke", "#4a90e2")
+      .attr("stroke", my_blue)
       .attr("stroke-width", 2)
       .attr("stroke-dasharray", "4 4")
       .attr("cursor", "ew-resize");
@@ -220,7 +235,7 @@ export default function AnimatedChart() {
       .attr("class", "label")
       .attr("x", xScale(retirement_age))
       .attr("y", margin - 10)
-      .attr("fill", "#4a90e2")
+      .attr("fill", my_blue)
       .attr("text-anchor", "middle")
       .attr("font-weight", "bold")
       .attr("font-size", "14px")
@@ -231,7 +246,7 @@ export default function AnimatedChart() {
       .attr("class", "net-worth")
       .attr("x", xScale(retirement_age))
       .attr("y", margin + 10)
-      .attr("fill", "#4a90e2")
+      .attr("fill", my_blue)
       .attr("text-anchor", "middle")
       .attr("font-size", "14px")
       .text(`Net Worth: ${money(data.find((d) => d.is_retired === true)?.net_worth)}`);
@@ -252,7 +267,7 @@ export default function AnimatedChart() {
       const [mouseX] = d3.pointer(event);
       const new_age = xScale.invert(mouseX);
 
-      const entry = data.find((d) => d.age >= new_age);
+      const entry = binarySearch(data, (d) => d.age >= new_age);
 
       if (entry && entry.age >= age && entry.age < death_age + 1) {
         setMarkerAge(entry.age);
@@ -263,8 +278,8 @@ export default function AnimatedChart() {
     };
 
     svg.on("mousedown", (event: MouseEvent) => {
-      svg.on("mousemove", updatePosition);
       updatePosition(event);
+      svg.on("mousemove", updatePosition);
     });
 
     d3.select(window).on("mouseup", () => {

@@ -15,7 +15,7 @@ const commonMiddleware = [
 ];
 
 app.use('*', async (c, next) => {
-  const result = await Try(() => next());
+  const result = await Try(next);
   if (result.failure) {
     console.error('Server error:', result.error);
     return c.text('Internal Server Error', 500);
@@ -43,7 +43,9 @@ app.get('/assets/*',
 
 const htmlCache = new Map<string, string>();
 function getHtmlFile(path: string): string {
-  if (htmlCache.has(path)) return htmlCache.get(path)!;
+  const cachedHtml = htmlCache.get(path);
+  if (cachedHtml) return cachedHtml;
+
   const html = readFileSync(`./dist${path}.html`, 'utf-8');
   htmlCache.set(path, html);
   return html;
