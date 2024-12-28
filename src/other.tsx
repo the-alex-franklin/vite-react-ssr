@@ -1,9 +1,10 @@
+import '@total-typescript/ts-reset';
 import 'virtual:windi.css';
 import { hydrateRoot } from 'react-dom/client';
 import { z } from 'zod';
 
-const initial_data = typeof window !== 'undefined' ? window.__INITIAL_DATA__ : null;
-const parsed_data = z.object({}).passthrough().nullish().parse(initial_data);
+const initial_data = typeof window !== 'undefined' ? JSON.parse(window.__INITIAL_DATA__) : null;
+const parsed_data = z.object({}).passthrough().nullable().parse(initial_data);
 
 export default function Other() {
   return (

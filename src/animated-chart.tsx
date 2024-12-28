@@ -2,21 +2,19 @@ import { hydrateRoot } from "react-dom/client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import moment from "moment";
 import * as d3 from "d3";
-import { z } from "zod";
 import "virtual:windi.css";
 
-const initial_data = typeof window !== "undefined" ? window.__INITIAL_DATA__ : null;
-const parsed_data = z.object({
-  date_of_birth: z.string(),
-  retirement_age: z.number(),
-  death_age: z.number().transform((value) => value + 1),
-  working_annual_income: z.number(),
-  retirment_monthly_expenses: z.number(),
-  tax_rate: z.number(),
-  savings_rate: z.number(),
-  annual_investment_return_pct: z.number(),
-  invested_savings: z.number(),
-}).safeParse(initial_data);
+const dummy_props = {
+  date_of_birth: moment("1991-06-05"),
+  retirement_age: 65,
+  death_age: 92,
+  working_annual_income: 180_000,
+  retirment_monthly_expenses: 34_000,
+  tax_rate: 0.35,
+  savings_rate: 0.15,
+  annual_investment_return_pct: 0.10,
+  invested_savings: 2500,
+};
 
 function money(value: number | null | undefined): string {
   if (value == null) return '$0.00';
@@ -26,69 +24,45 @@ function money(value: number | null | undefined): string {
   });
 }
 
-function binarySearch<T>(
-  array: T[],
-  predicate: (value: T) => boolean,
-): T | undefined {
-  let left = 0;
-  let right = array.length - 1;
-
-  while (left <= right) {
-    const mid = Math.floor((left + right) / 2);
-    if (predicate(array[mid]!)) {
-      right = mid - 1;
-    } else {
-      left = mid + 1;
-    }
-  }
-
-  return array[left];
-}
-
 const my_blue = "#4a90e2";
 
 type Data = { age: number; net_worth: number; is_retired: boolean };
 
 export default function AnimatedChart() {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [markerAge, setMarkerAge] = useState<number | null>(null);
-
-  // if (!parsed_data.success) return (
-  //   <div className="w-screen h-screen bg-gray-800 flex flex-col items-center justify-center">
-  //     <div className="text-white">Invalid data</div>
-  //   </div>
-  // );
+  const [markerAge, setMarkerAge] = useState<number | null>(65);
 
   const { data, age, death_age, retirement_age } = useMemo(() => {
-    const date_of_birth = moment('1991-06-05');
+    const {
+      date_of_birth,
+      retirement_age,
+      death_age,
+      working_annual_income,
+      retirment_monthly_expenses,
+      tax_rate,
+      savings_rate,
+      annual_investment_return_pct,
+      invested_savings,
+    } = dummy_props;
+
+    setMarkerAge(retirement_age);
+
     const age = moment().diff(date_of_birth, 'months') / 12;
     const age_moment = moment({ date: date_of_birth.date() });
-
-    const retirement_age = 42;
-    setMarkerAge(retirement_age);
     const retirement_moment = moment(date_of_birth).add(retirement_age, 'years');
-
-    const death_age = 84;
     const death_moment = moment(date_of_birth).add(death_age + 1, 'years');
-
-    const working_annual_income = 180_000;
-    const retirment_monthly_expenses = 20_000;
-    const tax_rate = 0.35;
-    const savings_rate = 0.15;
-    const annual_investment_return_pct = 0.10;
-    const invested_savings = 2500;
 
     const monthly_return_pct = annual_investment_return_pct / 12;
     const post_tax_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
     const monthly_savings_contribution = post_tax_monthly_income * savings_rate;
 
-    let virtual_savings = invested_savings;
     const data: Data[] = [{ age, net_worth: invested_savings, is_retired: false }];
+    let virtual_savings = invested_savings;
     while (age_moment.add(1, 'month').isBefore(death_moment, 'month')) {
       const virtual_age = age_moment.diff(date_of_birth, 'years', true);
 
       const income_modifier = data.at(-1)!.is_retired
-        ? retirment_monthly_expenses
+        ? -retirment_monthly_expenses
         : monthly_savings_contribution;
 
       virtual_savings += virtual_savings * monthly_return_pct + income_modifier;
@@ -140,7 +114,7 @@ export default function AnimatedChart() {
 
     const xScale = d3
       .scaleLinear()
-      .domain([age, death_age])
+      .domain([age, death_age + 1])
       .range([margin, width - margin]);
 
     const yScale = d3
@@ -267,7 +241,7 @@ export default function AnimatedChart() {
       const [mouseX] = d3.pointer(event);
       const new_age = xScale.invert(mouseX);
 
-      const entry = binarySearch(data, (d) => d.age >= new_age);
+      const entry = data.find((d) => d.age >= new_age);
 
       if (entry && entry.age >= age && entry.age < death_age + 1) {
         setMarkerAge(entry.age);

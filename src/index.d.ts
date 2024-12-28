@@ -1,5 +1,5 @@
 interface Window {
-  __INITIAL_DATA__?: unknown;
+  __INITIAL_DATA__?: any;
   webkit?: {
     messageHandlers?: {
       customEvent?: {

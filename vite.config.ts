@@ -50,8 +50,7 @@ export default defineConfig({
         assetFileNames: "assets/[name].[ext]",
         manualChunks(id, meta) {
           if (id.includes("node_modules/")) {
-            return "vendor";
-            // return "node_modules/" + id.split("node_modules/").at(-1)?.split("/")[0];
+            return "node_modules/" + id.split("node_modules/").at(-1)?.split("/")[0];
           }
 
           if (id.includes("src/")) {
