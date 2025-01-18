@@ -2,37 +2,70 @@ import { hydrateRoot } from "react-dom/client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import moment from "moment";
 import * as d3 from "d3";
+import { z } from "zod";
 import "virtual:windi.css";
 
-const dummy_props = {
+const initial_data = typeof window !== "undefined" ? window.__INITIAL_DATA__ : null;
+const schema = z.object({
+  date_of_birth: z.string().transform((value) => moment(value)),
+  retirement_age: z.number(),
+  death_age: z.number(),
+  working_annual_income: z.number(),
+  retirment_monthly_expenses: z.number(),
+  tax_rate: z.number(),
+  savings_rate: z.number(),
+  annual_investment_return_pct: z.number(),
+  invested_savings: z.number(),
+});
+type Schema = z.infer<typeof schema>;
+// const parsed_data = schema.nullish().safeParse(initial_data).data;
+const parsed_data = {
   date_of_birth: moment("1991-06-05"),
   retirement_age: 65,
-  death_age: 92,
+  death_age: 94,
   working_annual_income: 180_000,
-  retirment_monthly_expenses: 34_000,
-  tax_rate: 0.35,
+  retirment_monthly_expenses: 10_000,
+  tax_rate: 0.25,
   savings_rate: 0.15,
-  annual_investment_return_pct: 0.10,
-  invested_savings: 2500,
+  annual_investment_return_pct: 0.07,
+  invested_savings: 0,
 };
 
 function money(value: number | null | undefined): string {
-  if (value == null) return '$0.00';
+  if (!value) return '$0.00';
   return '$' + value.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
 
+function clampZero(value: number): number {
+  return Math.max(0, value);
+}
+
+function twoDecimals(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 const my_blue = "#4a90e2";
 
-type Data = { age: number; net_worth: number; is_retired: boolean };
+type Data = {
+  age: number;
+  net_worth: number;
+  is_retired: boolean;
+};
 
 export default function AnimatedChart() {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [markerAge, setMarkerAge] = useState<number | null>(65);
+  if (!parsed_data) return (
+    <div className="w-screen h-screen bg-gray-800 flex flex-col items-center justify-center">
+      <div className="text-white text-2xl">No data provided.</div>
+    </div>
+  );
 
-  const { data, age, death_age, retirement_age } = useMemo(() => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [markerAge, setMarkerAge] = useState(parsed_data.retirement_age);
+
+  const { chart_data, age, retirement_age, death_age } = useMemo(() => {
     const {
       date_of_birth,
       retirement_age,
@@ -43,9 +76,7 @@ export default function AnimatedChart() {
       savings_rate,
       annual_investment_return_pct,
       invested_savings,
-    } = dummy_props;
-
-    setMarkerAge(retirement_age);
+    } = parsed_data;
 
     const age = moment().diff(date_of_birth, 'months') / 12;
     const age_moment = moment({ date: date_of_birth.date() });
@@ -56,25 +87,25 @@ export default function AnimatedChart() {
     const post_tax_monthly_income = (working_annual_income / 12) * (1 - tax_rate);
     const monthly_savings_contribution = post_tax_monthly_income * savings_rate;
 
-    const data: Data[] = [{ age, net_worth: invested_savings, is_retired: false }];
-    let virtual_savings = invested_savings;
+    let virtual_savings = clampZero(invested_savings);
+    const chart_data: Data[] = [{ age, net_worth: virtual_savings, is_retired: false }];
     while (age_moment.add(1, 'month').isBefore(death_moment, 'month')) {
       const virtual_age = age_moment.diff(date_of_birth, 'years', true);
 
-      const income_modifier = data.at(-1)!.is_retired
+      const income_modifier = chart_data.at(-1)!.is_retired
         ? -retirment_monthly_expenses
         : monthly_savings_contribution;
 
       virtual_savings += virtual_savings * monthly_return_pct + income_modifier;
 
-      data.push({
-        age: Math.round(virtual_age * 100) / 100,
-        net_worth: Math.max(virtual_savings, 0),
+      chart_data.push({
+        age: twoDecimals(virtual_age),
+        net_worth: clampZero(invested_savings),
         is_retired: age_moment.isSameOrAfter(retirement_moment, 'month'),
       });
     }
 
-    return { data, age, death_age, retirement_age };
+    return { chart_data, age, retirement_age, death_age };
   }, []);
 
   useEffect(() => {
@@ -119,7 +150,7 @@ export default function AnimatedChart() {
 
     const yScale = d3
       .scaleLinear()
-      .domain([0, (d3.max(data, (d) => d.net_worth)! * 1.1)])
+      .domain([0, (d3.max(chart_data, (d) => d.net_worth)! * 1.1)])
       .nice()
       .range([height - margin, margin]);
 
@@ -127,7 +158,7 @@ export default function AnimatedChart() {
     const yAxis = d3.axisLeft(yScale).tickFormat((d) => {
       const value = +d;
       if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
-      if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+      if (value >= 100_000) return `$${(value / 1_000_000).toFixed(1)}M`;
       return `$${value.toFixed(0)}`;
     });
 
@@ -178,14 +209,14 @@ export default function AnimatedChart() {
 
     svg
       .append("path")
-      .datum(data)
+      .datum(chart_data)
       .attr("fill", "url(#gradient)")
       .attr("d", areaGenerator)
       .attr("clip-path", "url(#clip)");
 
     svg
       .append("path")
-      .datum(data)
+      .datum(chart_data)
       .attr("fill", "none")
       .attr("stroke", my_blue)
       .attr("stroke-width", 2)
@@ -223,7 +254,7 @@ export default function AnimatedChart() {
       .attr("fill", my_blue)
       .attr("text-anchor", "middle")
       .attr("font-size", "14px")
-      .text(`Net Worth: ${money(data.find((d) => d.is_retired === true)?.net_worth)}`);
+      .text(`Net Worth: ${money(chart_data.find((d) => d.is_retired === true)?.net_worth)}`);
   }, []);
 
   useEffect(() => {
@@ -241,7 +272,7 @@ export default function AnimatedChart() {
       const [mouseX] = d3.pointer(event);
       const new_age = xScale.invert(mouseX);
 
-      const entry = data.find((d) => d.age >= new_age);
+      const entry = chart_data.find((d) => d.age >= new_age);
 
       if (entry && entry.age >= age && entry.age < death_age + 1) {
         setMarkerAge(entry.age);

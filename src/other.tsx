@@ -1,4 +1,3 @@
-import '@total-typescript/ts-reset';
 import 'virtual:windi.css';
 import { hydrateRoot } from 'react-dom/client';
 import { z } from 'zod';

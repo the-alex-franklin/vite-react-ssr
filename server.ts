@@ -69,7 +69,7 @@ app.post('/*',
     const result = await Try(async () => {
       const template = getHtmlFile(path);
       const data = await c.req.text();
-      const injectable = data ? `<script>window.__INITIAL_DATA__ = ${JSON.stringify(data)}</script>` : '';
+      const injectable = data ? `<script>window.__INITIAL_DATA__ = ${data}</script>` : '';
       return template.replace('<!--injectable-->', injectable);
     });
 
