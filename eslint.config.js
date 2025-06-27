@@ -46,6 +46,7 @@ export default [
       'no-unreachable': 'warn',
       'no-unused-labels': 'off',
       'no-undef': 'off',
+      'no-redeclare': 'off',
 
       // Indentation
       indent: ['warn', 2, {

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import moment from "moment";
 import * as d3 from "d3";
 import { z } from "zod";
+import { pipe } from "./utils/functions/pipe";
 import "virtual:windi.css";
 
 const initial_data = typeof window !== "undefined" ? window.__INITIAL_DATA__ : null;
@@ -47,9 +48,35 @@ function twoDecimals(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function binarySearch(chart_data: ChartData[], new_age: number): ChartData {
+  if (chart_data.length === 0) throw new Error("Empty chart data");
+
+  let left = 0;
+  let right = chart_data.length - 1;
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    if (mid < 0 || mid >= chart_data.length) break;
+
+    const midValue = chart_data[mid];
+    if (midValue == null) throw new Error("Out of range");
+
+    if (midValue.age === new_age) return midValue;
+
+    if (midValue.age < new_age) {
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  if (left < chart_data.length) return chart_data[left]!;
+  return chart_data.at(-1)!;
+}
+
 const my_blue = "#4a90e2";
 
-type Data = {
+type ChartData = {
   age: number;
   net_worth: number;
   is_retired: boolean;
@@ -58,7 +85,7 @@ type Data = {
 export default function AnimatedChart() {
   if (!parsed_data) return (
     <div className="w-screen h-screen bg-gray-800 flex flex-col items-center justify-center">
-      <div className="text-white text-2xl">No data provided.</div>
+      <div className="text-white text-2xl">No data provided</div>
     </div>
   );
 
@@ -88,7 +115,7 @@ export default function AnimatedChart() {
     const monthly_savings_contribution = post_tax_monthly_income * savings_rate;
 
     let virtual_savings = clampZero(invested_savings);
-    const chart_data: Data[] = [{ age, net_worth: virtual_savings, is_retired: false }];
+    const chart_data: ChartData[] = [{ age, net_worth: virtual_savings, is_retired: false }];
     while (age_moment.add(1, 'month').isBefore(death_moment, 'month')) {
       const virtual_age = age_moment.diff(date_of_birth, 'years', true);
 
@@ -100,7 +127,7 @@ export default function AnimatedChart() {
 
       chart_data.push({
         age: twoDecimals(virtual_age),
-        net_worth: clampZero(invested_savings),
+        net_worth: clampZero(virtual_savings),
         is_retired: age_moment.isSameOrAfter(retirement_moment, 'month'),
       });
     }
@@ -177,14 +204,14 @@ export default function AnimatedChart() {
       .attr("font-size", "12px");
 
     const areaGenerator = d3
-      .area<Data>()
+      .area<ChartData>()
       .x((d) => xScale(d.age))
       .y0(yScale(0))
       .y1((d) => yScale(d.net_worth))
       .curve(d3.curveMonotoneX);
 
     const lineGenerator = d3
-      .line<Data>()
+      .line<ChartData>()
       .x((d) => xScale(d.age))
       .y((d) => yScale(d.net_worth))
       .curve(d3.curveMonotoneX);
@@ -254,7 +281,11 @@ export default function AnimatedChart() {
       .attr("fill", my_blue)
       .attr("text-anchor", "middle")
       .attr("font-size", "14px")
-      .text(`Net Worth: ${money(chart_data.find((d) => d.is_retired === true)?.net_worth)}`);
+      .text(`Net Worth: ${
+      pipe(
+        binarySearch(chart_data, retirement_age).net_worth,
+        money,
+      )}`);
   }, []);
 
   useEffect(() => {
@@ -272,8 +303,7 @@ export default function AnimatedChart() {
       const [mouseX] = d3.pointer(event);
       const new_age = xScale.invert(mouseX);
 
-      const entry = chart_data.find((d) => d.age >= new_age);
-
+      const entry = binarySearch(chart_data, new_age);
       if (entry && entry.age >= age && entry.age < death_age + 1) {
         setMarkerAge(entry.age);
         line.attr("x1", xScale(entry.age)).attr("x2", xScale(entry.age));
